@@ -1,16 +1,14 @@
 import fs from 'fs';
-import https from 'https';
 
 const url = 'https://www.serebii.net/pokemonchampions/pokemon.shtml';
 
 console.log('Fetching latest roster from Serebii...');
 
-https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } }, (res) => {
-  let data = '';
-  res.on('data', chunk => data += chunk);
-  res.on('end', () => {
-    // Regex to capture the base name from href and the optional suffix from the image src
-    // e.g. <a href="/pokedex-champions/charizard/"><img src="/pokemonhome/pokemon/small/006-mx.png"
+async function main() {
+  try {
+    const serebiiRes = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    const data = await serebiiRes.text();
+
     const regex = /href="\/pokedex-champions\/([^"]+)\/"[^>]*><img src="\/pokemonhome\/pokemon\/(?:small\/)?(?:[0-9]+)(-[a-z0-9]+)?\.png"/g;
     const matches = [...data.matchAll(regex)];
     
@@ -25,7 +23,6 @@ https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } }, (res) => {
       '-e': '-eternal'
     };
     
-    // Build the final PokeAPI names
     const namesArray = matches.map(m => {
       const baseName = m[1].toLowerCase().trim();
       const serebiiSuffix = m[2] ? m[2].toLowerCase() : '';
@@ -33,7 +30,6 @@ https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } }, (res) => {
       return baseName + pokeApiSuffix;
     });
 
-    // Clean, lowercase, and remove duplicates
     const names = [...new Set(namesArray)];
     
     if (names.length === 0) {
@@ -41,11 +37,40 @@ https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } }, (res) => {
       return;
     }
 
-    const content = `export const CHAMPIONS_ROSTER = ${JSON.stringify(names, null, 2)};\n`;
-    
+    console.log(`Found ${names.length} Pokémon. Fetching types from PokéAPI...`);
+    const rosterData = [];
+    const BATCH_SIZE = 15;
+
+    for (let i = 0; i < names.length; i += BATCH_SIZE) {
+      const batch = names.slice(i, i + BATCH_SIZE);
+      const batchPromises = batch.map(async (name) => {
+        try {
+          const pRes = await fetch(`https://pokeapi.co/api/v2/pokemon/${name}`);
+          if (!pRes.ok) {
+            console.warn(`\nWarning: ${name} not found in PokéAPI.`);
+            return { name, types: [] };
+          }
+          const pData = await pRes.json();
+          const types = pData.types.sort((a, b) => a.slot - b.slot).map(t => t.type.name);
+          return { name, types };
+        } catch (e) {
+          console.warn(`\nError fetching ${name}: ${e.message}`);
+          return { name, types: [] };
+        }
+      });
+
+      const results = await Promise.all(batchPromises);
+      rosterData.push(...results);
+      process.stdout.write(`\rProgress: ${rosterData.length} / ${names.length}`);
+    }
+    console.log('');
+
+    const content = `export const CHAMPIONS_ROSTER = ${JSON.stringify(rosterData, null, 2)};\n`;
     fs.writeFileSync('src/lib/championsRoster.js', content);
-    console.log(`✅ Successfully updated src/lib/championsRoster.js with ${names.length} Pokémon!`);
-  });
-}).on('error', err => {
-  console.error('Network Error:', err.message);
-});
+    console.log(`✅ Successfully updated src/lib/championsRoster.js with ${rosterData.length} Pokémon + types!`);
+  } catch (err) {
+    console.error('Error:', err.message);
+  }
+}
+
+main();

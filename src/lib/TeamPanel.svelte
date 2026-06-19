@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { fetchPokemon, fetchAllPokemonNames } from './api.js';
+  import { fetchPokemon, fetchAllPokemonDetails } from './api.js';
   import PokemonCard from './PokemonCard.svelte';
 
   export let title;
@@ -8,26 +8,42 @@
   export let maxSize = 6;
   export let accent = 'var(--accent)';
 
+  const TYPES = ['All', 'normal', 'fire', 'water', 'electric', 'grass', 'ice', 'fighting', 'poison', 'ground', 'flying', 'psychic', 'bug', 'rock', 'ghost', 'dragon', 'dark', 'steel', 'fairy'];
+
   let query = '';
+  let typeFilter1 = 'All';
+  let typeFilter2 = 'All';
   let loading = false;
   let error = '';
 
-  let allNames = [];
+  let allPokemon = [];
   let showSuggestions = false;
   let activeIndex = -1;
   let inputRef;
 
   onMount(async () => {
-    allNames = await fetchAllPokemonNames();
+    allPokemon = await fetchAllPokemonDetails();
   });
 
-  $: suggestions = query.trim()
-    ? allNames
-        .filter(
-          (n) => n.includes(query.trim().toLowerCase()) && n !== query.trim().toLowerCase()
-        )
-        .slice(0, 8)
-    : [];
+  $: suggestions = (() => {
+    const q = query.trim().toLowerCase();
+    const isTyping = q.length > 0;
+    
+    // If neither searching nor filtering, show nothing
+    if (!isTyping && typeFilter1 === 'All' && typeFilter2 === 'All') return [];
+    
+    return allPokemon
+      .filter(p => {
+        // Match name
+        const matchName = !isTyping || (p.name.includes(q) && p.name !== q);
+        // Match type 1
+        const matchType1 = typeFilter1 === 'All' || (p.types && p.types.includes(typeFilter1));
+        // Match type 2
+        const matchType2 = typeFilter2 === 'All' || (p.types && p.types.includes(typeFilter2));
+        return matchName && matchType1 && matchType2;
+      })
+      .slice(0, 12);
+  })();
 
   $: {
     // Reset active index when query changes
@@ -79,7 +95,7 @@
     if (e.key === 'Enter') {
       e.preventDefault();
       if (showSuggestions && activeIndex >= 0 && activeIndex < suggestions.length) {
-        query = suggestions[activeIndex];
+        query = suggestions[activeIndex].name;
         addPokemon();
         showSuggestions = false;
       } else {
@@ -104,7 +120,7 @@
   }
 
   function handleFocus() {
-    if (query.trim()) {
+    if (query.trim() || typeFilter1 !== 'All' || typeFilter2 !== 'All') {
       showSuggestions = true;
     }
   }
@@ -113,8 +129,8 @@
     showSuggestions = true;
   }
 
-  function selectSuggestion(name) {
-    query = name;
+  function selectSuggestion(p) {
+    query = p.name;
     addPokemon();
     showSuggestions = false;
     inputRef?.focus();
@@ -128,6 +144,19 @@
   </div>
 
   <div class="search-row">
+    <div class="type-filters">
+      <select bind:value={typeFilter1} aria-label="Filter by type 1" disabled={loading || team.length >= maxSize} on:change={handleInput}>
+        {#each TYPES as t}
+          <option value={t}>{t === 'All' ? 'Type 1' : t.charAt(0).toUpperCase() + t.slice(1)}</option>
+        {/each}
+      </select>
+      <select bind:value={typeFilter2} aria-label="Filter by type 2" disabled={loading || team.length >= maxSize} on:change={handleInput}>
+        {#each TYPES as t}
+          <option value={t}>{t === 'All' ? 'Type 2' : t.charAt(0).toUpperCase() + t.slice(1)}</option>
+        {/each}
+      </select>
+    </div>
+
     <div class="input-wrapper">
       <input
         bind:this={inputRef}
@@ -136,21 +165,28 @@
         on:focus={handleFocus}
         on:blur={handleBlur}
         on:input={handleInput}
-        placeholder="Add a Pokémon, e.g. pikachu"
+        placeholder="Search Pokémon..."
         disabled={loading || team.length >= maxSize}
         aria-label="Search Pokémon to add to {title}"
         autocomplete="off"
       />
       {#if showSuggestions && suggestions.length > 0 && !loading && team.length < maxSize}
         <ul class="suggestions">
-          {#each suggestions as name, i}
+          {#each suggestions as p, i}
             <!-- svelte-ignore a11y-click-events-have-key-events -->
             <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
             <li
               class:active={i === activeIndex}
-              on:click={() => selectSuggestion(name)}
+              on:click={() => selectSuggestion(p)}
             >
-              {name.replace(/-/g, ' ')}
+              <span class="sugg-name">{p.name.replace(/-/g, ' ')}</span>
+              <span class="sugg-types">
+                {#if p.types}
+                  {#each p.types as t}
+                    <span class="type-pill" data-type={t}>{t}</span>
+                  {/each}
+                {/if}
+              </span>
             </li>
           {/each}
         </ul>
@@ -204,6 +240,11 @@
     gap: 0.5rem;
   }
 
+  .type-filters {
+    display: flex;
+    gap: 0.25rem;
+  }
+
   .input-wrapper {
     flex: 1;
     position: relative;
@@ -226,6 +267,22 @@
 
   input::placeholder {
     color: var(--text-muted);
+  }
+
+  select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.55rem 0.5rem;
+    color: var(--text);
+    font-size: 0.8rem;
+    min-width: 85px;
+    cursor: pointer;
+  }
+
+  select:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
 
   .suggestions {
@@ -252,6 +309,24 @@
     cursor: pointer;
     border-radius: 4px;
     text-transform: capitalize;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .sugg-types {
+    display: flex;
+    gap: 0.25rem;
+  }
+
+  .type-pill {
+    font-size: 0.65rem;
+    padding: 0.15rem 0.35rem;
+    border-radius: 4px;
+    background: var(--border);
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
 
   .suggestions li:hover,

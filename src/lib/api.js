@@ -5,20 +5,9 @@ import { CHAMPIONS_ROSTER } from './championsRoster.js';
 const abilityCache = new Map();
 let allPokemonNames = [];
 
-/** Fetches a cached list of all Pokémon names for autocomplete. */
-export async function fetchAllPokemonNames() {
-  if (allPokemonNames.length > 0) return allPokemonNames;
-  try {
-    const res = await fetch(`${BASE}/pokemon?limit=10000`);
-    if (!res.ok) return [];
-    const data = await res.json();
-    allPokemonNames = data.results
-      .filter((r) => CHAMPIONS_ROSTER.includes(r.name))
-      .map((r) => r.name);
-    return allPokemonNames;
-  } catch {
-    return [];
-  }
+/** Fetches a cached list of all Pokémon for autocomplete. */
+export async function fetchAllPokemonDetails() {
+  return CHAMPIONS_ROSTER;
 }
 
 /** Fetches a single ability's short English effect text, with caching. */
@@ -47,7 +36,7 @@ export async function fetchPokemon(nameOrId) {
   const key = String(nameOrId).trim().toLowerCase().replace(/\s+/g, '-');
   if (!key) throw new Error('Enter a Pokémon name.');
   
-  if (!CHAMPIONS_ROSTER.includes(key)) {
+  if (!CHAMPIONS_ROSTER.some(p => p.name === key)) {
     throw new Error(`"${nameOrId}" is not available in Pokémon Champions.`);
   }
 
