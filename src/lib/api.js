@@ -1,6 +1,7 @@
 const BASE = 'https://pokeapi.co/api/v2';
 
 const pokemonCache = new Map();
+import { CHAMPIONS_ROSTER } from './championsRoster.js';
 const abilityCache = new Map();
 let allPokemonNames = [];
 
@@ -11,7 +12,9 @@ export async function fetchAllPokemonNames() {
     const res = await fetch(`${BASE}/pokemon?limit=10000`);
     if (!res.ok) return [];
     const data = await res.json();
-    allPokemonNames = data.results.map((r) => r.name);
+    allPokemonNames = data.results
+      .filter((r) => CHAMPIONS_ROSTER.includes(r.name))
+      .map((r) => r.name);
     return allPokemonNames;
   } catch {
     return [];
@@ -43,6 +46,10 @@ export async function fetchAbility(name) {
 export async function fetchPokemon(nameOrId) {
   const key = String(nameOrId).trim().toLowerCase().replace(/\s+/g, '-');
   if (!key) throw new Error('Enter a Pokémon name.');
+  
+  if (!CHAMPIONS_ROSTER.includes(key)) {
+    throw new Error(`"${nameOrId}" is not available in Pokémon Champions.`);
+  }
 
   if (pokemonCache.has(key)) {
     const cached = pokemonCache.get(key);
