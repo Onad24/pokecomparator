@@ -80,7 +80,8 @@ export async function fetchPokemon(nameOrId) {
     sprite,
     types,
     abilities,
-    stats
+    stats,
+    moves: data.moves.map(m => m.move.name)
   };
 
   pokemonCache.set(key, pokemon);

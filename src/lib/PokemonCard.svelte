@@ -4,6 +4,7 @@
   export let pokemon;
   export let onRemove = () => {};
   export let onToggle = () => {};
+  export let onInfo = () => {};
 
   if (pokemon.isActive === undefined) pokemon.isActive = true;
 
@@ -26,7 +27,8 @@
       <input type="checkbox" bind:checked={pokemon.isActive} on:change={() => onToggle(pokemon)} />
       <span class="toggle-label">Active</span>
     </label>
-    <button class="remove" on:click={() => onRemove(pokemon)} aria-label="Remove {pokemon.name}">✕</button>
+    <button class="icon-btn info" on:click={() => onInfo(pokemon)} aria-label="Info for {pokemon.name}">ℹ</button>
+    <button class="icon-btn remove" on:click={() => onRemove(pokemon)} aria-label="Remove {pokemon.name}">✕</button>
   </div>
 
   <div class="card-head">
@@ -144,25 +146,34 @@
     cursor: pointer;
   }
 
-  .remove {
+  .icon-btn {
     width: 1.6rem;
     height: 1.6rem;
     border-radius: 50%;
     background: var(--surface-2);
     border: 1px solid var(--border);
     color: var(--text-muted);
-    font-size: 0.7rem;
+    font-size: 0.8rem;
     display: flex;
     align-items: center;
     justify-content: center;
     line-height: 1;
     transition: background 0.15s, color 0.15s;
+    cursor: pointer;
+  }
+
+  .icon-btn:hover {
+    color: #fff;
   }
 
   .remove:hover {
     background: var(--bad);
-    color: #fff;
     border-color: var(--bad);
+  }
+
+  .info:hover {
+    background: var(--accent);
+    border-color: var(--accent);
   }
 
   .card-head {

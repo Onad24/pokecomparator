@@ -52,10 +52,12 @@ async function main() {
           }
           const pData = await pRes.json();
           const types = pData.types.sort((a, b) => a.slot - b.slot).map(t => t.type.name);
-          return { name, types };
+          const abilities = pData.abilities.map(a => a.ability.name);
+          const moves = pData.moves.map(m => m.move.name);
+          return { name, types, abilities, moves };
         } catch (e) {
           console.warn(`\nError fetching ${name}: ${e.message}`);
-          return { name, types: [] };
+          return { name, types: [], abilities: [], moves: [] };
         }
       });
 
@@ -67,7 +69,7 @@ async function main() {
 
     const content = `export const CHAMPIONS_ROSTER = ${JSON.stringify(rosterData, null, 2)};\n`;
     fs.writeFileSync('src/lib/championsRoster.js', content);
-    console.log(`✅ Successfully updated src/lib/championsRoster.js with ${rosterData.length} Pokémon + types!`);
+    console.log(`✅ Successfully updated src/lib/championsRoster.js with ${rosterData.length} Pokémon + types & abilities & moves!`);
   } catch (err) {
     console.error('Error:', err.message);
   }

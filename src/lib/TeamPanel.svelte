@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { fetchPokemon, fetchAllPokemonDetails } from './api.js';
   import PokemonCard from './PokemonCard.svelte';
+  import PokemonModal from './PokemonModal.svelte';
 
   export let title;
   export let team = [];
@@ -13,16 +14,29 @@
   let query = '';
   let typeFilter1 = 'All';
   let typeFilter2 = 'All';
+  let abilityFilter = 'All';
+  let moveFilter = 'All';
   let loading = false;
   let error = '';
 
   let allPokemon = [];
+  let availableAbilities = [];
+  let availableMoves = [];
   let showSuggestions = false;
   let activeIndex = -1;
   let inputRef;
+  let activeModalPokemon = null;
 
   onMount(async () => {
     allPokemon = await fetchAllPokemonDetails();
+    const abilitySet = new Set();
+    const moveSet = new Set();
+    for (const p of allPokemon) {
+      if (p.abilities) p.abilities.forEach(a => abilitySet.add(a));
+      if (p.moves) p.moves.forEach(m => moveSet.add(m));
+    }
+    availableAbilities = Array.from(abilitySet).sort();
+    availableMoves = Array.from(moveSet).sort();
   });
 
   $: suggestions = (() => {
@@ -30,7 +44,7 @@
     const isTyping = q.length > 0;
     
     // If neither searching nor filtering, show nothing
-    if (!isTyping && typeFilter1 === 'All' && typeFilter2 === 'All') return [];
+    if (!isTyping && typeFilter1 === 'All' && typeFilter2 === 'All' && abilityFilter === 'All' && moveFilter === 'All') return [];
     
     return allPokemon
       .filter(p => {
@@ -40,7 +54,12 @@
         const matchType1 = typeFilter1 === 'All' || (p.types && p.types.includes(typeFilter1));
         // Match type 2
         const matchType2 = typeFilter2 === 'All' || (p.types && p.types.includes(typeFilter2));
-        return matchName && matchType1 && matchType2;
+        // Match ability
+        const matchAbility = abilityFilter === 'All' || (p.abilities && p.abilities.includes(abilityFilter));
+        // Match move
+        const matchMove = moveFilter === 'All' || (p.moves && p.moves.includes(moveFilter));
+
+        return matchName && matchType1 && matchType2 && matchAbility && matchMove;
       })
       .slice(0, 12);
   })();
@@ -120,7 +139,7 @@
   }
 
   function handleFocus() {
-    if (query.trim() || typeFilter1 !== 'All' || typeFilter2 !== 'All') {
+    if (query.trim() || typeFilter1 !== 'All' || typeFilter2 !== 'All' || abilityFilter !== 'All' || moveFilter !== 'All') {
       showSuggestions = true;
     }
   }
@@ -143,7 +162,7 @@
     <span class="count">{team.length}/{maxSize}</span>
   </div>
 
-  <div class="search-row">
+  <div class="search-container">
     <div class="type-filters">
       <select bind:value={typeFilter1} aria-label="Filter by type 1" disabled={loading || team.length >= maxSize} on:change={handleInput}>
         {#each TYPES as t}
@@ -155,46 +174,67 @@
           <option value={t}>{t === 'All' ? 'Type 2' : t.charAt(0).toUpperCase() + t.slice(1)}</option>
         {/each}
       </select>
+      <select class="ability-select" bind:value={abilityFilter} aria-label="Filter by ability" disabled={loading || team.length >= maxSize} on:change={handleInput}>
+        <option value="All">All Abilities</option>
+        {#each availableAbilities as a}
+          <option value={a}>{a.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</option>
+        {/each}
+      </select>
+      <select class="move-select" bind:value={moveFilter} aria-label="Filter by move" disabled={loading || team.length >= maxSize} on:change={handleInput}>
+        <option value="All">All Moves</option>
+        {#each availableMoves as m}
+          <option value={m}>{m.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</option>
+        {/each}
+      </select>
     </div>
 
-    <div class="input-wrapper">
-      <input
-        bind:this={inputRef}
-        bind:value={query}
-        on:keydown={handleKeydown}
-        on:focus={handleFocus}
-        on:blur={handleBlur}
-        on:input={handleInput}
-        placeholder="Search Pokémon..."
-        disabled={loading || team.length >= maxSize}
-        aria-label="Search Pokémon to add to {title}"
-        autocomplete="off"
-      />
-      {#if showSuggestions && suggestions.length > 0 && !loading && team.length < maxSize}
-        <ul class="suggestions">
-          {#each suggestions as p, i}
-            <!-- svelte-ignore a11y-click-events-have-key-events -->
-            <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
-            <li
-              class:active={i === activeIndex}
-              on:click={() => selectSuggestion(p)}
-            >
-              <span class="sugg-name">{p.name.replace(/-/g, ' ')}</span>
-              <span class="sugg-types">
-                {#if p.types}
-                  {#each p.types as t}
-                    <span class="type-pill" data-type={t}>{t}</span>
-                  {/each}
-                {/if}
-              </span>
-            </li>
-          {/each}
-        </ul>
-      {/if}
+    <div class="search-row">
+      <div class="input-wrapper">
+        <input
+          bind:this={inputRef}
+          bind:value={query}
+          on:keydown={handleKeydown}
+          on:focus={handleFocus}
+          on:blur={handleBlur}
+          on:input={handleInput}
+          placeholder="Search Pokémon..."
+          disabled={loading || team.length >= maxSize}
+          aria-label="Search Pokémon to add to {title}"
+          autocomplete="off"
+        />
+
+        {#if showSuggestions && suggestions.length > 0 && !loading && team.length < maxSize}
+          <ul class="suggestions">
+            {#each suggestions as p, i}
+              <!-- svelte-ignore a11y-click-events-have-key-events -->
+              <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+              <li
+                class:active={i === activeIndex}
+                on:click={() => selectSuggestion(p)}
+              >
+                <div class="sugg-left">
+                  <span class="sugg-name">{p.name.replace(/-/g, ' ')}</span>
+                  {#if p.abilities && p.abilities.length > 0}
+                    <span class="sugg-abilities">{p.abilities.join(', ')}</span>
+                  {/if}
+                </div>
+                <span class="sugg-types">
+                  {#if p.types}
+                    {#each p.types as t}
+                      <span class="type-pill" data-type={t}>{t}</span>
+                    {/each}
+                  {/if}
+                </span>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+      </div>
+
+      <button on:click={() => { addPokemon(); showSuggestions = false; }} disabled={loading || team.length >= maxSize}>
+        {loading ? 'Loading…' : 'Add'}
+      </button>
     </div>
-    <button on:click={() => { addPokemon(); showSuggestions = false; }} disabled={loading || team.length >= maxSize}>
-      {loading ? 'Loading…' : 'Add'}
-    </button>
   </div>
 
   {#if error}<p class="error">{error}</p>{/if}
@@ -204,11 +244,15 @@
   {:else}
     <div class="cards">
       {#each sortedTeam as p (p.id)}
-        <PokemonCard pokemon={p} onRemove={removePokemon} onToggle={togglePokemon} />
+        <PokemonCard pokemon={p} onRemove={removePokemon} onToggle={togglePokemon} onInfo={() => activeModalPokemon = p} />
       {/each}
     </div>
   {/if}
 </section>
+
+{#if activeModalPokemon}
+  <PokemonModal pokemon={activeModalPokemon} onClose={() => activeModalPokemon = null} />
+{/if}
 
 <style>
   .panel {
@@ -235,6 +279,12 @@
     color: var(--text-muted);
   }
 
+  .search-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
   .search-row {
     display: flex;
     gap: 0.5rem;
@@ -243,6 +293,7 @@
   .type-filters {
     display: flex;
     gap: 0.25rem;
+    flex-wrap: wrap;
   }
 
   .input-wrapper {
@@ -278,6 +329,11 @@
     font-size: 0.8rem;
     min-width: 85px;
     cursor: pointer;
+  }
+
+  .ability-select, .move-select {
+    min-width: 110px;
+    max-width: 140px;
   }
 
   select:disabled {
